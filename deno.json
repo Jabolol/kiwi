@@ -1,0 +1,8 @@
+{
+    "lock": false,
+    "imports": {
+        "nacl": "npm:tweetnacl",
+        "discordeno": "npm:discordeno",
+        "reflect-metadata": "npm:reflect-metadata"
+    }
+}
