@@ -20,7 +20,7 @@ export class App {
   }
 
   isValidBody(
-    body: string | { error: Error; status: number },
+    body: string | { error: string; status: number },
   ): body is string {
     return typeof body === "string";
   }
@@ -28,21 +28,21 @@ export class App {
   async validateRequest(request: Request) {
     const REQUIRED_HEADERS = ["X-Signature-Ed25519", "X-Signature-Timestamp"];
     if (request.method !== "POST") {
-      return { error: new Error("Method not allowed"), status: 405 };
+      return { error: "Method not allowed", status: 405 };
     }
     if (!REQUIRED_HEADERS.every((header) => request.headers.has(header))) {
-      return { error: new Error("Missing headers"), status: 400 };
+      return { error: "Missing headers", status: 400 };
     }
     const { valid, body } = await this.verifySignature(request);
     if (!valid) {
-      return { error: new Error("Invalid signature"), status: 401 };
+      return { error: "Invalid signature", status: 401 };
     }
     return body;
   }
 
   handleInteraction(
     interaction: DiscordInteraction,
-  ): DiscordInteractionResponse | { error: Error; status: number } {
+  ): DiscordInteractionResponse | { error: string; status: number } {
     switch (interaction.type) {
       case InteractionTypes.Ping: {
         return {
@@ -57,12 +57,12 @@ export class App {
             this,
           );
         if (!command) {
-          return { error: new Error("Command not found"), status: 404 };
+          return { error: "Command not found", status: 404 };
         }
         return command(interaction);
       }
       default: {
-        return { error: new Error("Command not found"), status: 404 };
+        return { error: "Command not found", status: 404 };
       }
     }
   }
@@ -70,13 +70,13 @@ export class App {
   bootstrap() {
     const count = Reflect.getMetadata(`total`, this) || 0;
     if (count === 0) {
-      throw new Error("No commands registered");
+      throw "No commands registered";
     }
 
     return async (request: Request) => {
       const body = await this.validateRequest(request);
       if (!this.isValidBody(body)) {
-        return new Response(JSON.stringify(body.error), {
+        return new Response(JSON.stringify({ error: body.error }), {
           status: body.status,
         });
       }
@@ -84,12 +84,7 @@ export class App {
       const response = this.handleInteraction(interaction);
 
       return new Response(
-        JSON.stringify(response, (key, val) => {
-          if (key === "error" && val instanceof Error) {
-            return val.message;
-          }
-          return val;
-        }),
+        JSON.stringify(response),
         {
           headers: { "content-type": "application/json" },
         },
