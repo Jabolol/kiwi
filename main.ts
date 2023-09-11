@@ -76,9 +76,8 @@ export class App {
     return async (request: Request) => {
       const body = await this.validateRequest(request);
       if (!this.isValidBody(body)) {
-        return new Response(JSON.stringify({ error: body.error }), {
-          status: body.status,
-        });
+        const { error, status } = body;
+        return new Response(JSON.stringify({ error }), { status });
       }
       const interaction: DiscordInteraction = JSON.parse(body);
       const response = this.handleInteraction(interaction);
