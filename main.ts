@@ -83,9 +83,17 @@ export class App {
       const interaction: DiscordInteraction = JSON.parse(body);
       const response = this.handleInteraction(interaction);
 
-      return new Response(JSON.stringify(response), {
-        headers: { "content-type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify(response, (key, val) => {
+          if (key === "error" && val instanceof Error) {
+            return val.message;
+          }
+          return val;
+        }),
+        {
+          headers: { "content-type": "application/json" },
+        },
+      );
     };
   }
 
