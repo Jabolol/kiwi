@@ -88,10 +88,25 @@ class App extends Client {
       title: "New giveaway!",
     };
 
-    const response = await fetch(
+    await fetch(
       `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`,
       {
         method: "PATCH",
+        headers: {
+          Authorization: `Bot ${Deno.env.get("BOT_TOKEN")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: `Giveaway created at <#${interaction.channel_id}>!`,
+          flags: 1 << 6,
+        }),
+      },
+    );
+
+    const message = await fetch(
+      `https://discord.com/api/v10/channels/${interaction.channel_id}/messages`,
+      {
+        method: "POST",
         headers: {
           Authorization: `Bot ${Deno.env.get("BOT_TOKEN")}`,
           "Content-Type": "application/json",
@@ -103,7 +118,7 @@ class App extends Client {
               type: MessageComponentTypes.ActionRow,
               components: [{
                 type: MessageComponentTypes.Button,
-                label: "0",
+                label: "",
                 emoji: {
                   id: "1151164303483863211",
                   name: "giveaway",
@@ -126,11 +141,11 @@ class App extends Client {
       },
     );
 
-    if (!response.ok) {
+    if (!message.ok) {
       throw new Error("Failed to create giveaway");
     }
 
-    const { id }: DiscordMessage = await response.json();
+    const { id }: DiscordMessage = await message.json();
 
     const config: GiveawayMeta = {
       prize,
@@ -141,7 +156,7 @@ class App extends Client {
     };
 
     await this.kv.set([`giveaway`, `${interaction.id}`], config);
-    await this.kv.enqueue(`${interaction.id}:${interaction.token}:${id}`, {
+    await this.kv.enqueue(`${interaction.id}:${interaction.channel_id}:${id}`, {
       delay: duration,
       keysIfUndelivered: [["error"]],
     });
@@ -162,6 +177,7 @@ class App extends Client {
     setTimeout(() => this.createGiveaway(interaction), 1e3);
     return {
       type: InteractionResponseTypes.DeferredChannelMessageWithSource,
+      data: { flags: 1 << 6 },
     };
   }
 
@@ -212,8 +228,6 @@ class App extends Client {
 
     await this.kv.set([`giveaway`, interactionId], value);
 
-    // TODO: update embed with new count
-
     return {
       type: InteractionResponseTypes.ChannelMessageWithSource,
       data: {
@@ -254,8 +268,8 @@ class App extends Client {
       throw new Error("Invalid message");
     }
 
-    const [id, token, message_id] = msg.split(":");
-    const { value } = await kv.get<GiveawayMeta>([`giveaway`, id]);
+    const [interaction, channel, message] = msg.split(":");
+    const { value } = await kv.get<GiveawayMeta>([`giveaway`, interaction]);
 
     if (!value) {
       return;
@@ -270,9 +284,7 @@ class App extends Client {
     );
 
     const original = await fetch(
-      `https://discord.com/api/v10/webhooks/${
-        Deno.env.get("CLIENT_ID")
-      }/${token}/messages/${message_id}`,
+      `https://discord.com/api/v10/channels/${channel}/messages/${message}`,
       {
         headers: {
           Authorization: `Bot ${Deno.env.get("BOT_TOKEN")}`,
@@ -282,17 +294,17 @@ class App extends Client {
     );
 
     if (!original.ok) {
-      await kv.delete([`giveaway`, id]);
+      await kv.delete([`giveaway`, interaction]);
       throw new Error("Failed to fetch original message");
     }
 
-    const { embeds: [embed], components }: DiscordMessage = await original
-      .json();
+    const {
+      embeds: [embed],
+      components,
+    }: DiscordMessage = await original.json();
 
     const response = await fetch(
-      `https://discord.com/api/v10/webhooks/${
-        Deno.env.get("CLIENT_ID")
-      }/${token}/messages/@original`,
+      `https://discord.com/api/v10/channels/${channel}/messages/${message}`,
       {
         method: "PATCH",
         headers: {
@@ -336,7 +348,7 @@ class App extends Client {
       throw new Error("Failed to edit message");
     }
 
-    await kv.delete([`giveaway`, id]);
+    await kv.delete([`giveaway`, interaction]);
   }
 
   static init() {
