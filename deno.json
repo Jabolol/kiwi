@@ -4,7 +4,11 @@
     "~/": "./",
     "nacl": "npm:tweetnacl",
     "discordeno": "npm:discordeno",
+    "color-thief": "npm:color-thief-wasm",
+    "parse-duration": "npm:parse-duration",
     "$std/": "https://deno.land/std@0.201.0/",
-    "reflect-metadata": "npm:reflect-metadata"
+    "reflect-metadata": "npm:reflect-metadata",
+    "probe-image-size": "npm:probe-image-size",
+    "canvas": "https://deno.land/x/canvas@v1.4.1/mod.ts"
   }
 }
