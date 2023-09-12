@@ -8,13 +8,13 @@ import {
 } from "discordeno";
 
 export class Client {
-  isValidBody(
+  private isValidBody(
     body: string | { error: string; status: number },
   ): body is string {
     return typeof body === "string";
   }
 
-  async validateRequest(request: Request) {
+  private async validateRequest(request: Request) {
     const REQUIRED_HEADERS = ["X-Signature-Ed25519", "X-Signature-Timestamp"];
     if (request.method !== "POST") {
       return { error: "Method not allowed", status: 405 };
@@ -29,7 +29,24 @@ export class Client {
     return body;
   }
 
-  async handleInteraction(
+  private async getHandler(
+    interaction: DiscordInteraction,
+    type: string,
+  ): Promise<DiscordInteractionResponse> {
+    const command = Reflect.getMetadata(type, this);
+    if (!command) {
+      return {
+        type: InteractionResponseTypes.ChannelMessageWithSource,
+        data: {
+          content: `reflect metadata for \`${type}\` not found`,
+          flags: 1 << 6,
+        },
+      };
+    }
+    return await command.call(this, interaction);
+  }
+
+  private async handleInteraction(
     interaction: DiscordInteraction,
   ): Promise<DiscordInteractionResponse | { error: string; status: number }> {
     switch (interaction.type) {
@@ -39,24 +56,39 @@ export class Client {
         };
       }
       case InteractionTypes.ApplicationCommand: {
-        const command:
-          | ((i: DiscordInteraction) => Promise<DiscordInteractionResponse>)
-          | undefined = Reflect.getMetadata(
-            `command:${interaction.data!.name}`,
-            this,
-          );
-        if (!command) {
-          return {
-            type: InteractionResponseTypes.ChannelMessageWithSource,
-            data: { content: "Command not found", flags: 1 << 6 },
-          };
-        }
-        return await command(interaction);
+        return await this.getHandler(
+          interaction,
+          `command:${interaction.data!.name}`,
+        );
+      }
+      case InteractionTypes.MessageComponent: {
+        const label = interaction.data!.custom_id?.split("_")[0];
+        return await this.getHandler(interaction, `label:${label}`);
       }
       default: {
         return { error: "Invalid interaction type", status: 400 };
       }
     }
+  }
+
+  private async verifySignature(request: Request) {
+    const PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY")!;
+    const signature = request.headers.get("X-Signature-Ed25519")!;
+    const timestamp = request.headers.get("X-Signature-Timestamp")!;
+    const body = await request.text();
+    const valid = nacl.sign.detached.verify(
+      new TextEncoder().encode(timestamp + body),
+      this.hexToUint8Array(signature),
+      this.hexToUint8Array(PUBLIC_KEY),
+    );
+
+    return { valid, body };
+  }
+
+  private hexToUint8Array(hex: string) {
+    return new Uint8Array(
+      hex.match(/.{1,2}/g)!.map((val) => parseInt(val, 16)),
+    );
   }
 
   bootstrap() {
@@ -82,26 +114,6 @@ export class Client {
       );
     };
   }
-
-  async verifySignature(request: Request) {
-    const PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY")!;
-    const signature = request.headers.get("X-Signature-Ed25519")!;
-    const timestamp = request.headers.get("X-Signature-Timestamp")!;
-    const body = await request.text();
-    const valid = nacl.sign.detached.verify(
-      new TextEncoder().encode(timestamp + body),
-      this.hexToUint8Array(signature),
-      this.hexToUint8Array(PUBLIC_KEY),
-    );
-
-    return { valid, body };
-  }
-
-  hexToUint8Array(hex: string) {
-    return new Uint8Array(
-      hex.match(/.{1,2}/g)!.map((val) => parseInt(val, 16)),
-    );
-  }
 }
 
 export function Command(name: string): MethodDecorator {
@@ -112,11 +124,26 @@ export function Command(name: string): MethodDecorator {
     }
     console.log(
       `%c%s %c/${name}`,
-      "color: magenta;",
+      "color: pink;",
       "==>",
-      "color: lime; font-weight: bold",
+      "color: white; font-weight: bold",
     );
     Reflect.defineMetadata(`command:${name}`, value, target);
     Reflect.defineMetadata(`total`, count + 1, target);
+  };
+}
+
+export function Button(label: string): MethodDecorator {
+  return (target, _propertyKey, { value }) => {
+    if (Reflect.getMetadata(`label:${label}`, target) !== undefined) {
+      throw new Error(`Label ${label} already registered`);
+    }
+    console.log(
+      `%c%s %c@${label}`,
+      "color: pink;",
+      "==>",
+      "color: white; font-weight: bold",
+    );
+    Reflect.defineMetadata(`label:${label}`, value, target);
   };
 }
