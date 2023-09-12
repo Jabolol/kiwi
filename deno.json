@@ -1,8 +1,10 @@
 {
-    "lock": false,
-    "imports": {
-        "nacl": "npm:tweetnacl",
-        "discordeno": "npm:discordeno",
-        "reflect-metadata": "npm:reflect-metadata"
-    }
+  "lock": false,
+  "imports": {
+    "~/": "./",
+    "nacl": "npm:tweetnacl",
+    "discordeno": "npm:discordeno",
+    "$std/": "https://deno.land/std@0.201.0/",
+    "reflect-metadata": "npm:reflect-metadata"
+  }
 }
