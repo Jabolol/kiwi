@@ -88,7 +88,7 @@ CLIENT_ID=
 Register the application commands:
 
 ```sh
-# TODO: dynamic command registration
+deno task register
 ```
 
 With
@@ -102,7 +102,7 @@ cloudflared tunnel --url http://localhost:8000
 Start the bot:
 
 ```sh
-deno run -A --unstable --watch=. main.ts
+deno task start
 ```
 
 Go to your application dashboard and update the `INTERACTIONS ENDPOINT URL` to
